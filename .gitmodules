@@ -1,0 +1,9 @@
+[submodule "gcc"]
+	path = gcc
+	url = https://gcc.gnu.org/git/gcc.git
+[submodule "binutils-gdb"]
+	path = binutils-gdb
+	url = https://sourceware.org/git/binutils-gdb.git
+[submodule "picolibc"]
+	path = picolibc
+	url = https://github.com/picolibc/picolibc.git
