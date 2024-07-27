@@ -21,7 +21,7 @@ endif()
 add_custom_command(
     OUTPUT binutils/Makefile
     COMMAND mkdir -p binutils
-    COMMAND 
+    COMMAND
         cd binutils && ${CMAKE_CURRENT_SOURCE_DIR}/binutils-gdb/configure
         --target=arm-none-eabi
         --prefix=${PREFIX}
@@ -57,47 +57,56 @@ add_custom_command(
     VERBATIM
 )
 
-find_program(MESON meson)
-
-# Build picolibc (stage 1) using the pre-existing (old) gcc
+# Build newlib using our "stage1" compiler (this is essentially newlib-nano)
 add_custom_command(
-    OUTPUT picolibc-stage1/build.ninja
-    COMMAND 
-        ${MESON} 
-        setup
-        --reconfigure
-        --cross-file=${CMAKE_CURRENT_SOURCE_DIR}/cross-thumbv6m-none-eabi.txt
-        -Dprefix=${PREFIX}/arm-none-eabi
-        -Dtests=false
-        -Dmultilib=false
-        -Dposix-console=true
-        -Dsemihost=false
-        -Dpicolib=true
-        -Dpicocrt=false
-        -Dcrt-runtime-size=true
-        -Dthread-local-storage=true
-        picolibc-stage1
-        ${CMAKE_CURRENT_SOURCE_DIR}/picolibc
+    OUTPUT newlib-cygwin/Makefile
+    COMMAND mkdir -p newlib-cygwin
+    COMMAND
+        cd newlib-cygwin && ${CMAKE_CURRENT_SOURCE_DIR}/newlib-cygwin/configure
+        --target=arm-none-eabi
+        --prefix=${PREFIX}
+        --disable-newlib-supplied-syscalls
+        --disable-newlib-io-float
+        --disable-newlib-io-long-double
+        --disable-newlib-io-pos-args
+        --disable-newlib-io-c99-formats
+        --disable-newlib-io-long-long
+        --disable-newlib-multithread
+        --disable-newlib-retargetable-locking
+        --disable-newlib-wide-orient
+        --disable-newlib-fseek-optimization
+        --disable-newlib-fvwrite-in-streamio
+        --disable-newlib-unbuf-stream-opt
+        --disable-newlib-atexit-dynamic-alloc
+        --enable-newlib-nano-malloc
+        --enable-newlib-nano-formatted-io
+        --enable-newlib-global-atexit
+        --enable-lite-exit
+        --enable-newlib-reent-small
+        --disable-multilib
+        --with-mode=thumb
+        --with-cpu=cortex-m0plus
+        --with-float=soft
+        --enable-libssp
+        --enable-target-optspace
     VERBATIM
 )
 
-find_program(NINJA ninja)
-
 add_custom_command(
-    OUTPUT picolibc-stage1/done
-    COMMAND ${NINJA}
-    COMMAND ${NINJA} install
+    OUTPUT newlib-cygwin/done
+    COMMAND $(MAKE)
+    COMMAND $(MAKE) install-strip
     COMMAND touch done
-    WORKING_DIRECTORY picolibc-stage1
-    DEPENDS picolibc-stage1/build.ninja
+    WORKING_DIRECTORY newlib-cygwin
+    DEPENDS newlib-cygwin/Makefile
     VERBATIM
 )
 
-# Build gcc using picolibc (stage 1) 
+# Build gcc using newlib-nano
 add_custom_command(
     OUTPUT gcc/Makefile
     COMMAND mkdir -p gcc
-    COMMAND 
+    COMMAND
         cd gcc && ${CMAKE_CURRENT_SOURCE_DIR}/gcc/configure
         --prefix=${PREFIX}
         --enable-languages=c,c++
@@ -127,7 +136,7 @@ add_custom_command(
     COMMAND $(MAKE) install-strip
     COMMAND touch done
     WORKING_DIRECTORY gcc
-    DEPENDS gcc/Makefile binutils/done picolibc-stage1/done
+    DEPENDS gcc/Makefile binutils/done newlib-cygwin/done
     VERBATIM
 )
 
@@ -141,25 +150,30 @@ add_custom_target(check_gcc
     COMMAND_EXPAND_LISTS
 )
 
-# Build picolibc (stage 2) using the newly built gcc
+find_program(MESON meson)
+find_program(NINJA ninja)
+# Build picolibc using the newly built gcc
 add_custom_command(
-    OUTPUT picolibc-stage2/build.ninja
-    COMMAND 
+    OUTPUT picolibc/build.ninja
+    COMMAND
         ${USE_NEW_GCC}
-        ${MESON} 
+        ${MESON}
         setup
         --reconfigure
         --cross-file=${CMAKE_CURRENT_SOURCE_DIR}/cross-thumbv6m-none-eabi.txt
-        -Dprefix=${PREFIX}/arm-none-eabi
+        -Dprefix=${PREFIX}/picolibc
+        -Dspecsdir=none
         -Dtests=false
         -Dmultilib=false
         -Dposix-console=true
         -Dsemihost=false
         -Dpicolib=true
         -Dpicocrt=false
+        -Dnewlib-initfini=false
         -Dcrt-runtime-size=true
         -Dthread-local-storage=true
-        picolibc-stage2
+        -Dnewlib-iconv-encodings=us_ascii,utf_8,utf_16
+        picolibc
         ${CMAKE_CURRENT_SOURCE_DIR}/picolibc
     DEPENDS gcc/done check_gcc
     VERBATIM
@@ -167,19 +181,19 @@ add_custom_command(
 )
 
 add_custom_command(
-    OUTPUT picolibc-stage2/done
+    OUTPUT picolibc/done
     COMMAND ${USE_NEW_GCC} ${NINJA}
     COMMAND ${USE_NEW_GCC} ${NINJA} install
     COMMAND touch done
-    WORKING_DIRECTORY picolibc-stage2
-    DEPENDS picolibc-stage2/build.ninja
+    WORKING_DIRECTORY picolibc
+    DEPENDS picolibc/build.ninja
     VERBATIM
     COMMAND_EXPAND_LISTS
 )
 
 # Main build target
 add_custom_target(build ALL
-    DEPENDS picolibc-stage2/done
+    DEPENDS gcc/done picolibc/done
     VERBATIM
 )
 
